@@ -183,19 +183,47 @@ int head_update(const ObjectID *new_commit) {
 
 // Create a new commit from the current staging area.
 //
-// HINTS - Useful functions to call:
-//   - tree_from_index   : writes the directory tree and gets the root hash
-//   - head_read         : gets the parent commit hash (if any)
-//   - pes_author        : retrieves the author name string (from pes.h)
-//   - time(NULL)        : gets the current unix timestamp
-//   - commit_serialize  : converts the filled Commit struct to a text buffer
-//   - object_write      : saves the serialized text as OBJ_COMMIT
-//   - head_update       : moves the branch pointer to your new commit
-//
 // Returns 0 on success, -1 on error.
 int commit_create(const char *message, ObjectID *commit_id_out) {
-    // TODO: Implement commit creation
-    // (See Lab Appendix for logical steps)
-    (void)message; (void)commit_id_out;
-    return -1;
+    Commit commit;
+    memset(&commit, 0, sizeof(commit));
+
+    // 1. Build a tree from the index.
+    if (tree_from_index(&commit.tree) != 0) {
+        fprintf(stderr, "error: nothing to commit (index is empty)\n");
+        return -1;
+    }
+
+    // 2. Read current HEAD as parent (may not exist for the first commit).
+    ObjectID parent_id;
+    if (head_read(&parent_id) == 0) {
+        commit.has_parent = 1;
+        commit.parent     = parent_id;
+    } else {
+        commit.has_parent = 0;
+    }
+
+    // 3. Fill in author and timestamp.
+    snprintf(commit.author, sizeof(commit.author), "%s", pes_author());
+    commit.timestamp = (uint64_t)time(NULL);
+
+    // 4. Fill in commit message.
+    snprintf(commit.message, sizeof(commit.message), "%s", message);
+
+    // 5. Serialize the commit to text.
+    void *raw;
+    size_t raw_len;
+    if (commit_serialize(&commit, &raw, &raw_len) != 0) return -1;
+
+    // 6. Write commit object to the object store.
+    if (object_write(OBJ_COMMIT, raw, raw_len, commit_id_out) != 0) {
+        free(raw);
+        return -1;
+    }
+    free(raw);
+
+    // 7. Update HEAD (branch pointer) to the new commit.
+    if (head_update(commit_id_out) != 0) return -1;
+
+    return 0;
 }

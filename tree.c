@@ -114,24 +114,157 @@ int tree_serialize(const Tree *tree, void **data_out, size_t *len_out) {
     return 0;
 }
 
-// ─── TODO: Implement these ──────────────────────────────────────────────────
+// ─── Implementation: tree_from_index ────────────────────────────────────────
+
+// Forward declaration: object_write is in object.c (always linked with tree.o).
+int object_write(ObjectType type, const void *data, size_t len, ObjectID *id_out);
+
+// Internal index reading ─────────────────────────────────────────────────────
+//
+// We intentionally avoid a link-time dependency on index.c so that the
+// test_tree binary (which links only tree.o + object.o) still builds.
+// The index file format is trivial enough to parse inline.
+
+#define TREE_MAX_INDEX_ENTRIES 10000
+
+typedef struct {
+    uint32_t mode;
+    ObjectID hash;
+    char     path[512];
+} _TFlatEntry;
+
+// Read the text index file (.pes/index) and populate a FlatEntry array.
+// Returns the number of entries read, or -1 on error.
+static int _load_flat_entries(_TFlatEntry *out, int max_entries) {
+    FILE *f = fopen(INDEX_FILE, "r");
+    if (!f) return 0;   // No index yet — empty is valid
+
+    int count = 0;
+    char hex[HASH_HEX_SIZE + 1];
+    uint32_t mode;
+    unsigned long long mtime;
+    uint32_t size;
+    char path[512];
+
+    while (count < max_entries &&
+           fscanf(f, "%o %64s %llu %u %511s\n",
+                  &mode, hex, &mtime, &size, path) == 5) {
+        out[count].mode = mode;
+        strncpy(out[count].path, path, sizeof(out[count].path) - 1);
+        out[count].path[sizeof(out[count].path) - 1] = '\0';
+        if (hex_to_hash(hex, &out[count].hash) != 0) {
+            fclose(f);
+            return -1;
+        }
+        count++;
+    }
+
+    fclose(f);
+    return count;
+}
+
+// Comparison for qsort — keeps entries sorted by path
+static int _cmp_flat(const void *a, const void *b) {
+    return strcmp(((_TFlatEntry *)a)->path, ((_TFlatEntry *)b)->path);
+}
+
+// Recursive helper: given an array of _TFlatEntry items (all paths relative
+// to the current tree level), build one tree object and write it to the
+// object store.
+static int _write_tree_level(const _TFlatEntry *entries, int count, ObjectID *id_out) {
+    Tree tree;
+    tree.count = 0;
+
+    int i = 0;
+    while (i < count) {
+        const char *path = entries[i].path;
+        const char *slash = strchr(path, '/');
+
+        if (!slash) {
+            // Plain file at this level
+            TreeEntry *te = &tree.entries[tree.count++];
+            te->mode = entries[i].mode;
+            te->hash = entries[i].hash;
+            strncpy(te->name, path, sizeof(te->name) - 1);
+            te->name[sizeof(te->name) - 1] = '\0';
+            i++;
+        } else {
+            // Subdirectory: gather all entries sharing this dir prefix
+            size_t prefix_len = (size_t)(slash - path);
+            char dir_name[256];
+            if (prefix_len >= sizeof(dir_name)) return -1;
+            memcpy(dir_name, path, prefix_len);
+            dir_name[prefix_len] = '\0';
+
+            // Collect entries belonging to this subdirectory
+            int sub_start = i;
+            while (i < count) {
+                const char *p = entries[i].path;
+                const char *s = strchr(p, '/');
+                if (!s) break;
+                size_t plen = (size_t)(s - p);
+                if (plen != prefix_len || strncmp(p, dir_name, prefix_len) != 0) break;
+                i++;
+            }
+            int sub_count = i - sub_start;
+
+            // Build FlatEntry array with the leading dir component stripped
+            _TFlatEntry *sub = malloc((size_t)sub_count * sizeof(_TFlatEntry));
+            if (!sub) return -1;
+
+            for (int j = 0; j < sub_count; j++) {
+                sub[j].mode = entries[sub_start + j].mode;
+                sub[j].hash = entries[sub_start + j].hash;
+                const char *rest = entries[sub_start + j].path + prefix_len + 1;
+                strncpy(sub[j].path, rest, sizeof(sub[j].path) - 1);
+                sub[j].path[sizeof(sub[j].path) - 1] = '\0';
+            }
+
+            // Recurse
+            ObjectID subtree_id;
+            if (_write_tree_level(sub, sub_count, &subtree_id) != 0) {
+                free(sub);
+                return -1;
+            }
+            free(sub);
+
+            // Add directory entry
+            TreeEntry *te = &tree.entries[tree.count++];
+            te->mode = 0040000;
+            te->hash = subtree_id;
+            strncpy(te->name, dir_name, sizeof(te->name) - 1);
+            te->name[sizeof(te->name) - 1] = '\0';
+        }
+    }
+
+    // Serialise and store this tree level
+    void *data;
+    size_t len;
+    if (tree_serialize(&tree, &data, &len) != 0) return -1;
+
+    int rc = object_write(OBJ_TREE, data, len, id_out);
+    free(data);
+    return rc;
+}
 
 // Build a tree hierarchy from the current index and write all tree
 // objects to the object store.
 //
-// HINTS - Useful functions and concepts for this phase:
-//   - index_load      : load the staged files into memory
-//   - strchr          : find the first '/' in a path to separate directories from files
-//   - strncmp         : compare prefixes to group files belonging to the same subdirectory
-//   - Recursion       : you will likely want to create a recursive helper function 
-//                       (e.g., `write_tree_level(entries, count, depth)`) to handle nested dirs.
-//   - tree_serialize  : convert your populated Tree struct into a binary buffer
-//   - object_write    : save that binary buffer to the store as OBJ_TREE
-//
 // Returns 0 on success, -1 on error.
 int tree_from_index(ObjectID *id_out) {
-    // TODO: Implement recursive tree building
-    // (See Lab Appendix for logical steps)
-    (void)id_out;
-    return -1;
+    _TFlatEntry *flat = malloc(TREE_MAX_INDEX_ENTRIES * sizeof(_TFlatEntry));
+    if (!flat) return -1;
+
+    int count = _load_flat_entries(flat, TREE_MAX_INDEX_ENTRIES);
+    if (count <= 0) {
+        free(flat);
+        return -1;   // Nothing staged
+    }
+
+    // Sort by path (index_save already sorts, but be safe)
+    qsort(flat, count, sizeof(_TFlatEntry), _cmp_flat);
+
+    int rc = _write_tree_level(flat, count, id_out);
+    free(flat);
+    return rc;
 }
