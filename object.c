@@ -192,13 +192,14 @@ int object_read(const ObjectID *id, ObjectType *type_out, void **data_out, size_
     }
 
     *len_out = size;
-    *data_out = malloc(size);
+    *data_out = malloc(size + 1);
     if (!*data_out) {
         free(buffer);
         return -1;
     }
 
     memcpy(*data_out, null_pos + 1, size);
+    ((char *)(*data_out))[size] = '\0';
 
     free(buffer);
     return 0;

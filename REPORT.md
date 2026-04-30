@@ -22,21 +22,11 @@ All four implementation files have been completed:
 
 ### Screenshot 1A — `./test_objects` All Tests Passing
 
-```
-Stored blob with hash: d58213f5dbe0629b5c2fa28e5c7d4213ea09227ed0221bbe9db5e5c4b9aafc12
-Object stored at: .pes/objects/d5/8213f5dbe0629b5c2fa28e5c7d4213ea09227ed0221bbe9db5e5c4b9aafc12
-PASS: blob storage
-PASS: deduplication
-PASS: integrity check
-
-All Phase 1 tests passed.
-```
+![Screenshot 1A — test_objects Passing](./Screenshots/1A.png)
 
 ### Screenshot 1B — Sharded Object Directory Structure
 
-```
-.pes/objects/d5/8213f5dbe0629b5c2fa28e5c7d4213ea09227ed0221bbe9db5e5c4b9aafc12
-```
+![Screenshot 1B — Object Directory Structure](./Screenshots/1B.png)
 
 ---
 
@@ -44,13 +34,7 @@ All Phase 1 tests passed.
 
 ### Screenshot 2A — `./test_tree` All Tests Passing
 
-```
-Serialized tree: 139 bytes
-PASS: tree serialize/parse roundtrip
-PASS: tree deterministic serialization
-
-All Phase 2 tests passed.
-```
+![Screenshot 2A — test_tree Passing](./Screenshots/2A.png)
 
 ### Screenshot 2B — Raw Tree Object (xxd)
 
@@ -65,30 +49,10 @@ After `pes add` and `pes commit`, a tree object is stored. The binary format enc
 
 ---
 
-## Phase 3: Index (Staging Area) — Screenshots
+### Screenshots 3A & 3B — `pes init`, `pes add`, `pes status`, and `cat .pes/index`
 
-### Screenshot 3A — `pes init` → `pes add` → `pes status`
+![Screenshot 3A & 3B — Index Status](./Screenshots/3AB.png)
 
-```
-Initialized empty PES repository in .pes/
-
-Staged changes:
-  staged:     file.txt
-  staged:     hello.txt
-
-Unstaged changes:
-  (nothing to show)
-
-Untracked files:
-  (nothing to show)
-```
-
-### Screenshot 3B — `cat .pes/index`
-
-```
-100644 58a67ed1c161a4e89a110968310fe31e39920ef68d4c7c7e0d6695797533f50d 1777545255 10 file.txt
-100644 0bd69098bd9b9cc5934a610ab65da429b525361147faa7b5b922919e9a23143d 1777545255 12 hello.txt
-```
 
 ---
 
@@ -96,94 +60,24 @@ Untracked files:
 
 ### Screenshot 4A — `pes log` After Three Commits
 
-```
-commit b50f47a83fdea1db90d71ad2a21e514d9893d7d45abae852b6d8e8177ba82f73
-Author: PES User <pes@localhost>
-Date:   1777545286
-
-    Add farewell
-
-commit fb4f38bbce0239de13cb625951e107decb921e25586cb10731d0e28ce64c91c5
-Author: PES User <pes@localhost>
-Date:   1777545286
-
-    Update file.txt
-
-commit 16b2b9f35a261de979dac81e35b3767ac34d8d9f79dc7cb1edd9fa287b55d117
-Author: PES User <pes@localhost>
-Date:   1777545286
-
-    Initial commit
-```
+![Screenshot 4A — pes log](./Screenshots/4A.png)
 
 ### Screenshot 4B — Object Store After Three Commits
 
-```
-Objects created: 10
-
-.pes/objects/0b/d69098bd9b9cc5934a610ab65da429b525361147faa7b5b922919e9a23143d
-.pes/objects/10/1f28a12274233d119fd3c8d7c7216054ddb5605f3bae21c6fb6ee3c4c7cbfa
-.pes/objects/16/b2b9f35a261de979dac81e35b3767ac34d8d9f79dc7cb1edd9fa287b55d117
-.pes/objects/58/a67ed1c161a4e89a110968310fe31e39920ef68d4c7c7e0d6695797533f50d
-.pes/objects/ab/5824a9ec1ef505b5480b3e37cd50d9c80be55012cabe0ca572dbf959788299
-.pes/objects/b1/7b838c5951aa88c09635c5895ef7e08f7fa1974d901ce282f30e08de0ccd92
-.pes/objects/b5/0f47a83fdea1db90d71ad2a21e514d9893d7d45abae852b6d8e8177ba82f73
-.pes/objects/d0/7733c25d2d137b7574be8c5542b562bf48bafeaa3829f61f75b8d10d5350f9
-.pes/objects/db/07a1451ca9544dbf66d769b505377d765efae7adc6b97b75cc9d2b3b3da6ff
-.pes/objects/fb/4f38bbce0239de13cb625951e107decb921e25586cb10731d0e28ce64c91c5
-```
+![Screenshot 4B — Object Store](./Screenshots/4B.png)
 
 The 10 objects break down as: 4 blobs (file.txt v1, hello.txt, file.txt v2, bye.txt) + 3 trees (one per commit's root snapshot) + 3 commits.
 
 ### Screenshot 4C — Reference Chain
 
-```
-cat .pes/HEAD
-ref: refs/heads/main
-
-cat .pes/refs/heads/main
-b50f47a83fdea1db90d71ad2a21e514d9893d7d45abae852b6d8e8177ba82f73
-```
+![Screenshot 4C — Reference Chain](./Screenshots/4C.png)
 
 ---
 
 ## Final — Integration Test
 
-```
-=== PES-VCS Integration Test ===
+![Integration Test Output](./Screenshots/Final.png)
 
---- Repository Initialization ---
-Initialized empty PES repository in .pes/
-PASS: .pes/objects exists
-PASS: .pes/refs/heads exists
-PASS: .pes/HEAD exists
-
---- Staging Files ---
-Status after add:
-Staged changes:
-  staged:     file.txt
-  staged:     hello.txt
-
-Unstaged changes:
-  (nothing to show)
-
-Untracked files:
-  (nothing to show)
-
---- First Commit ---
-Committed: 16b2b9f35a26... Initial commit
-
---- Second Commit ---
-Committed: fb4f38bbce02... Update file.txt
-
---- Third Commit ---
-Committed: b50f47a83fde... Add farewell
-
---- Full History ---
-[three commits shown — see Screenshot 4A]
-
-=== All integration tests completed ===
-```
 
 ---
 
